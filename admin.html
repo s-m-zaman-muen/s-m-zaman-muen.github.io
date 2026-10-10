@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex"><title>Admin</title>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@600;700;800&family=Plus+Jakarta+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root{--glow:#5b8cff;--ice:#bcd2ff;--mute:#9aa9d6;--line:rgba(160,185,255,.2);color-scheme:dark}
+*{box-sizing:border-box}[hidden]{display:none!important}
+body{margin:0;font-family:'Plus Jakarta Sans',system-ui,sans-serif;color:#e9efff;background:radial-gradient(60% 40% at 80% 0,rgba(40,90,255,.45),transparent 70%),#030818;min-height:100vh;line-height:1.5}
+h1,h2{font-family:'Bricolage Grotesque',system-ui,sans-serif;margin:0}
+button,input,select,textarea{font:inherit;color:inherit}
+input,textarea,select{width:100%;padding:11px 14px;border-radius:12px;border:1px solid var(--line);background:rgba(255,255,255,.05);outline:none}
+input[type=checkbox]{width:auto}input:focus,textarea:focus,select:focus{border-color:var(--glow)}
+select option{background:#0b1a4a}textarea{min-height:84px;resize:vertical}
+label{display:block;font-size:.82rem;color:var(--mute);margin:14px 0 6px}
+.btn{display:inline-block;cursor:pointer;padding:10px 18px;border-radius:99px;border:1px solid var(--line);background:rgba(255,255,255,.06);text-decoration:none;color:#fff;font-size:.9rem;transition:transform .25s,box-shadow .25s}
+.btn:hover{transform:translateY(-3px);box-shadow:0 14px 40px rgba(91,140,255,.55)}
+.pri{background:linear-gradient(135deg,#7aa2ff,#4b6cf0);border-color:transparent;font-weight:600}
+.card{border:1px solid var(--line);border-radius:20px;background:rgba(255,255,255,.04);padding:6px 22px 22px;margin-bottom:16px}
+.card h2{font-size:1.2rem;margin-top:18px}
+header{position:sticky;top:0;z-index:5;display:flex;flex-wrap:wrap;gap:12px;align-items:center;justify-content:space-between;padding:14px 5vw;background:rgba(3,8,24,.7);-webkit-backdrop-filter:blur(18px);backdrop-filter:blur(18px);border-bottom:1px solid var(--line)}
+#tabs{display:flex;gap:6px;flex-wrap:wrap}.tb{padding:8px 16px;border-radius:99px;border:1px solid transparent;background:none;cursor:pointer;color:var(--mute)}
+.tb.on{background:rgba(91,140,255,.2);border-color:var(--glow);color:#fff}
+main{max-width:860px;margin:28px auto;padding:0 5vw 80px}
+#login{max-width:380px;margin:14vh auto;padding:0 5vw}
+.row2{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+.pr{display:grid;grid-template-columns:150px 1fr;gap:16px;align-items:start}
+.th{width:150px;aspect-ratio:16/9;object-fit:cover;border-radius:12px;background:linear-gradient(135deg,#2c4fd6,#0a1440);display:block}
+.act{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px;align-items:center}.act .btn{padding:7px 14px}
+.del{border-color:rgba(255,100,100,.5);color:#ffb4b4}
+#toast{position:fixed;left:50%;bottom:28px;transform:translate(-50%,30px);opacity:0;padding:12px 22px;border-radius:99px;background:#1f3a9e;border:1px solid var(--glow);transition:.35s;z-index:20}
+#toast.show{opacity:1;transform:translate(-50%,0)}#toast.bad{background:#7a1f2b;border-color:#ff7b8a}
+.hint{color:var(--mute);font-size:.85rem;margin:6px 0 0}
+.pv{width:150px;aspect-ratio:4/5;object-fit:cover;border-radius:14px;border:1px solid var(--line);display:block;margin:12px 0;background:#0a1440}
+@media(max-width:640px){.row2,.pr{grid-template-columns:1fr}}
+</style></head><body>
+<div id="login"><h1>Admin login</h1><p class="hint">Only you can edit the website.</p>
+<form id="lf"><label>Email</label><input id="em" type="email" autocomplete="username" required><label>Password</label><input id="pw" type="password" autocomplete="current-password" required>
+<p id="err" class="hint" style="color:#ff9aa6"></p><button class="btn pri" style="margin-top:8px;width:100%">Log in</button></form></div>
+<div id="app" hidden><header><div><h1>Website admin</h1></div><nav id="tabs"></nav>
+<div><button class="btn pri" id="sv">Save changes</button> <a class="btn" href="index.html" target="_blank">View site</a> <button class="btn" id="so">Sign out</button></div></header>
+<main id="main"></main></div><div id="toast"></div>
+<script type="module">
+import cfg from './firebase-config.js';
+import {initializeApp} from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js';
+import {getAuth,signInWithEmailAndPassword,signOut,onAuthStateChanged} from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js';
+import {getFirestore,doc,getDoc,setDoc,collection,getDocs,addDoc,updateDoc,deleteDoc} from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js';
+const $=q=>document.querySelector(q);
+function h(t,a={},...k){const e=document.createElement(t);for(const x in a){if(x=='class')e.className=a[x];else if(x.startsWith('on'))e[x]=a[x];else e.setAttribute(x,a[x])}k.flat().forEach(c=>e.append(c));return e}
+function toast(m,bad){const t=$('#toast');t.textContent=m;t.className='show'+(bad?' bad':'');clearTimeout(toast.t);toast.t=setTimeout(()=>t.className='',2600)}
+const yt=u=>{const m=(u||'').match(/(?:youtu\.be\/|v=|shorts\/|embed\/)([\w-]{11})/);return m?m[1]:''};
+async function shrink(f,w,hh,q){const b=await createImageBitmap(f);let sw=b.width,sh=b.height,sx=0,sy=0,cw,ch;
+if(hh){const r=w/hh;if(sw/sh>r){const n=sh*r;sx=(sw-n)/2;sw=n}else{const n=sw/r;sy=(sh-n)*.2;sh=n}cw=w;ch=hh}else{cw=Math.min(w,sw);ch=Math.round(cw*sh/sw)}
+const c=document.createElement('canvas');c.width=cw;c.height=ch;c.getContext('2d').drawImage(b,sx,sy,sw,sh,0,0,cw,ch);const d=c.toDataURL('image/jpeg',q);if(d.length>800000)throw 0;return d}
+const D={brand:'Muen',name:'S M Zaman Muen',role:'Video Editor & Storyteller',intro:'I cut raw footage into videos people finish watching. Long-form, reels and podcasts — paced to keep attention and built to look premium.',button_text:"Let's make your next video hit harder",
+about_p1:"Hi, I'm S M Zaman Muen — a video editor based in Dhaka. I started editing because I loved how a single cut can change how a scene feels, and I've been chasing that feeling ever since.",about_p2:'I work with creators, brands and podcasters who want more than "just edited". Clean pacing, sharp sound, motion that supports the story and delivery on time, every time.',about_p3:'',
+stat1_number:'5',stat1_label:'Years of experience',stat2_number:'150',stat2_label:'Videos delivered',stat3_number:'',stat3_label:'',
+cta_title:"Let's work together",cta_text:"Have a project in mind? Send me the details and I'll reply within 24 hours.",email:'collabwithmuen@gmail.com',whatsapp:'8801818644605',instagram:'https://www.instagram.com/s_m_zaman_muen/',facebook:'https://www.facebook.com/muin.moni',footer:'© 2026 S M Zaman Muen. All rights reserved.',faq_title:'Questions & answers',
+faqs:[{q:'How long does a typical edit take?',a:'Short-form videos usually take 1 to 2 days and long-form or podcast episodes take 3 to 5 days. Rush delivery is possible.'},{q:'How many revisions are included?',a:'Every project includes two rounds of revisions so the final video matches your vision. Extra rounds can be added if needed.'},{q:'Which software and formats do you work with?',a:'I edit in Premiere Pro, After Effects and DaVinci Resolve, and deliver in any format and aspect ratio you need.'},{q:'How does your pricing work?',a:"Pricing depends on video length, style and complexity. Send me your project details and I'll share a clear quote within 24 hours."},{q:'How do we get started?',a:"Message me with a short brief and a link to your raw footage. We'll agree on scope and timeline, and I'll start right after."}]};
+let app,auth,db,S={},FQ=[],PR=[],hero='',tab='Profile',flt='all';
+if(cfg.apiKey.startsWith('PASTE'))$('#err').textContent='Firebase config is not set yet (see SETUP.txt).';
+else{app=initializeApp(cfg);auth=getAuth(app);db=getFirestore(app)}
+$('#lf').onsubmit=async e=>{e.preventDefault();if(!auth)return;$('#err').textContent='';try{await signInWithEmailAndPassword(auth,$('#em').value,$('#pw').value)}catch{$('#err').textContent='Wrong email or password.'}};
+$('#so').onclick=()=>signOut(auth);
+if(auth)onAuthStateChanged(auth,async u=>{$('#login').hidden=!!u;$('#app').hidden=!u;if(u)await boot()});
+async function boot(){try{const [a,b,c]=await Promise.all([getDoc(doc(db,'site','settings')),getDoc(doc(db,'site','hero')),getDocs(collection(db,'projects'))]);
+const d=a.exists()?a.data():{};S={...D,...d};FQ=(d.faqs||D.faqs).map(x=>({...x}));delete S.faqs;hero=b.exists()?b.data().img:'';
+PR=c.docs.map(x=>({id:x.id,...x.data()})).sort((x,y)=>x.order-y.order)}catch{toast('Could not load data. Check Firestore rules.',1)}render()}
+$('#sv').onclick=async()=>{try{await setDoc(doc(db,'site','settings'),{...S,faqs:FQ.filter(f=>f.q&&f.a)});toast('Saved ✓ — website updated')}catch{toast('Save failed',1)}};
+const T=['Profile','About','Projects','FAQ','Contact'];
+function fld(k,l,area){const i=h(area?'textarea':'input');i.value=S[k]||'';i.oninput=()=>S[k]=i.value;return h('div',{},h('label',{},l),i)}
+function render(){const tb=$('#tabs');tb.replaceChildren(...T.map(t=>h('button',{class:'tb'+(t==tab?' on':''),onclick:()=>{tab=t;render()}},t)));const m=$('#main');m.replaceChildren();
+$('#sv').hidden=tab=='Projects';
+if(tab=='Profile'){const pv=h('img',{class:'pv'});if(hero)pv.src=hero;else pv.hidden=true;const f=h('input',{type:'file',accept:'image/*'});
+f.onchange=async()=>{try{hero=await shrink(f.files[0],900,1125,.82);await setDoc(doc(db,'site','hero'),{img:hero});pv.src=hero;pv.hidden=false;toast('Photo updated ✓')}catch{toast('Photo failed (try a smaller image)',1)}};
+m.append(h('div',{class:'card'},h('h2',{},'Your photo'),pv,f,h('p',{class:'hint'},'Saved instantly. The photo is auto-cropped to 4:5 and compressed.')),
+h('div',{class:'card'},h('h2',{},'Hero section'),fld('name','Full name'),fld('brand','Navbar name'),fld('role','Role / title'),fld('intro','Short introduction',1),fld('button_text','Hero button text')))}
+if(tab=='About')m.append(h('div',{class:'card'},h('h2',{},'About text'),fld('about_p1','Paragraph 1',1),fld('about_p2','Paragraph 2',1),fld('about_p3','Paragraph 3 (leave empty to hide)',1)),
+h('div',{class:'card'},h('h2',{},'Numbers (empty = hidden)'),...[1,2,3].map(n=>h('div',{class:'row2'},fld('stat'+n+'_number','Number '+n),fld('stat'+n+'_label','Label '+n)))));
+if(tab=='Contact')m.append(h('div',{class:'card'},h('h2',{},'Contact section'),fld('cta_title','Heading'),fld('cta_text','Text',1),fld('email','Email'),fld('whatsapp','WhatsApp number (country code, digits only)'),fld('instagram','Instagram link (empty = hide)'),fld('facebook','Facebook link (empty = hide)'),fld('footer','Footer text')));
+if(tab=='FAQ'){const c=h('div',{class:'card'},h('h2',{},'FAQ'),fld('faq_title','Section heading'));
+FQ.forEach((f,i)=>{const q=h('input'),a=h('textarea');q.value=f.q;a.value=f.a;q.oninput=()=>f.q=q.value;a.oninput=()=>f.a=a.value;
+const mv=d=>()=>{const j=i+d;if(j<0||j>=FQ.length)return;[FQ[i],FQ[j]]=[FQ[j],FQ[i]];render()};
+c.append(h('label',{},'Question '+(i+1)),q,h('label',{},'Answer'),a,h('div',{class:'act'},h('button',{class:'btn',onclick:mv(-1)},'↑'),h('button',{class:'btn',onclick:mv(1)},'↓'),h('button',{class:'btn del',onclick:()=>{FQ.splice(i,1);render()}},'Delete')))});
+c.append(h('div',{class:'act'},h('button',{class:'btn',onclick:()=>{if(FQ.length<12){FQ.push({q:'',a:''});render()}}},'+ Add question')),h('p',{class:'hint'},'Press "Save changes" at the top when done (max 12 questions).'));m.append(c)}
+if(tab=='Projects')projects(m)}
+const CATS=[['long','Long form'],['short','Short / Reel'],['pod','Podcast']];
+function projects(m){const cat=h('select',{},...CATS.map(([v,l])=>h('option',{value:v},l))),ti=h('input',{placeholder:'Title'}),su=h('input',{placeholder:'Subtitle (e.g. Instagram · 30 sec)'}),li=h('input',{placeholder:'YouTube link'}),fi=h('input',{type:'file',accept:'image/*'});
+const add=h('button',{class:'btn pri',onclick:async()=>{if(!ti.value.trim())return toast('Write a title first',1);try{const th=fi.files[0]?await shrink(fi.files[0],640,0,.75):'';const p={cat:cat.value,title:ti.value.trim(),sub:su.value.trim(),link:li.value.trim(),thumb:th,order:Date.now(),show:true};const r=await addDoc(collection(db,'projects'),p);PR.push({id:r.id,...p});toast('Video added ✓');render()}catch{toast('Could not add',1)}}},'Add video');
+m.append(h('div',{class:'card'},h('h2',{},'Add a video'),h('div',{class:'row2'},h('div',{},h('label',{},'Section'),cat),h('div',{},h('label',{},'Title'),ti)),h('label',{},'Subtitle'),su,h('label',{},'YouTube link (thumbnail comes automatically)'),li,h('label',{},'Custom thumbnail (optional)'),fi,h('div',{class:'act'},add)),
+h('div',{id:'ft',class:'act',style:'margin-bottom:14px'},...[['all','All'],...CATS].map(([v,l])=>h('button',{class:'tb'+(v==flt?' on':''),onclick:()=>{flt=v;render()}},l))));
+const list=PR.filter(p=>flt=='all'||p.cat==flt);if(!list.length)m.append(h('p',{class:'hint'},'No videos here yet.'));
+list.forEach((p,i)=>{const t=h('img',{class:'th'});const src=()=>p.thumb||(yt(p.link)?`https://img.youtube.com/vi/${yt(p.link)}/hqdefault.jpg`:'');if(src())t.src=src();
+const upd=(k,v)=>{p[k]=v;updateDoc(doc(db,'projects',p.id),{[k]:v}).then(()=>toast('Saved ✓'),()=>toast('Save failed',1))};
+const inp=(k,ph)=>{const e=h('input',{placeholder:ph});e.value=p[k]||'';e.onchange=()=>{upd(k,e.value.trim());if(k=='link'&&src())t.src=src()};return e};
+const sel=h('select',{},...CATS.map(([v,l])=>h('option',{value:v},l)));sel.value=p.cat;sel.onchange=()=>{upd('cat',sel.value);render()};
+const vis=h('input',{type:'checkbox'});vis.checked=p.show!==false;vis.onchange=()=>upd('show',vis.checked);
+const f=h('input',{type:'file',accept:'image/*',hidden:''});f.onchange=async()=>{try{const d=await shrink(f.files[0],640,0,.75);upd('thumb',d);t.src=d}catch{toast('Image failed',1)}};
+const mv=d=>async()=>{const q=list[i+d];if(!q)return;const a=p.order,b=q.order;p.order=b;q.order=a;try{await Promise.all([updateDoc(doc(db,'projects',p.id),{order:b}),updateDoc(doc(db,'projects',q.id),{order:a})]);PR.sort((x,y)=>x.order-y.order);render()}catch{toast('Move failed',1)}};
+m.append(h('div',{class:'card'},h('div',{class:'pr',style:'margin-top:18px'},h('div',{},t),h('div',{},inp('title','Title'),h('div',{style:'height:8px'}),inp('sub','Subtitle'),h('div',{style:'height:8px'}),inp('link','YouTube link'),h('div',{style:'height:8px'}),sel)),
+h('div',{class:'act'},h('label',{style:'margin:0;display:flex;gap:6px;align-items:center'},vis,'Visible'),h('button',{class:'btn',onclick:()=>f.click()},'Change thumbnail'),f,p.thumb?h('button',{class:'btn',onclick:()=>{upd('thumb','');t.src=src();if(!src())t.removeAttribute('src')}},'Use YouTube thumbnail'):'',h('button',{class:'btn',onclick:mv(-1)},'↑'),h('button',{class:'btn',onclick:mv(1)},'↓'),h('button',{class:'btn del',onclick:async()=>{if(!confirm('Delete this video?'))return;try{await deleteDoc(doc(db,'projects',p.id));PR=PR.filter(x=>x.id!=p.id);toast('Deleted');render()}catch{toast('Delete failed',1)}}},'Delete'))))})}
+</script></body></html>
